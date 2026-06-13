@@ -145,6 +145,48 @@ CSV の実データは PostgreSQL 上の専用スキーマに、`table_name` ご
 
 ## 起動方法
 
-step0 ではアプリケーション実装をまだ作成しません。
+step1 ではバックエンドのみ起動できます。
 
-Docker Compose による起動方法は step1 以降で追記します。
+```bash
+docker compose up --build
+```
+
+起動後、以下の URL にアクセスすると Hello World API のレスポンスを確認できます。
+
+```bash
+curl http://localhost:8000/api/hello/
+```
+
+期待するレスポンス:
+
+```json
+{"message": "Hello, world!"}
+```
+
+バックエンドはホストの `localhost:8000` にのみ公開します。
+
+## テスト
+
+```bash
+docker compose run --rm backend pytest
+```
+
+## format / lint
+
+```bash
+docker compose run --rm backend ruff format .
+docker compose run --rm backend ruff check .
+```
+
+step1 では DB を使用しないため、Django の DB 設定は行いません。PostgreSQL 連携は step2 で追加します。
+
+## VS Code
+
+ローカルの VS Code で Python ライブラリの警告が出る場合は、バックエンド用の仮想環境を作成してください。
+
+```bash
+cd backend
+uv sync --group dev
+```
+
+このリポジトリでは VS Code の Python interpreter を `backend/.venv/bin/python` に設定しています。
