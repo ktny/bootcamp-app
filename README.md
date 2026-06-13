@@ -145,7 +145,7 @@ CSV の実データは PostgreSQL 上の専用スキーマに、`table_name` ご
 
 ## 起動方法
 
-step1 ではバックエンドのみ起動できます。
+step2 ではバックエンドと PostgreSQL を起動できます。
 
 ```bash
 docker compose up --build
@@ -165,6 +165,18 @@ curl http://localhost:8000/api/hello/
 
 バックエンドはホストの `localhost:8000` にのみ公開します。
 
+items 一覧 API は以下で確認できます。
+
+```bash
+curl http://localhost:8000/api/items/
+```
+
+期待するレスポンス:
+
+```json
+{"items": [{"id": 1, "name": "サンプルCSV", "tableName": "sample_csv", "createdAt": "2026-01-01T00:00:00Z"}]}
+```
+
 ## テスト
 
 ```bash
@@ -178,7 +190,7 @@ docker compose run --rm backend ruff format .
 docker compose run --rm backend ruff check .
 ```
 
-step1 では DB を使用しないため、Django の DB 設定は行いません。PostgreSQL 連携は step2 で追加します。
+step2 では `items` テーブルと seed データを migration で作成します。
 
 ## VS Code
 

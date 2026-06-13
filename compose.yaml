@@ -2,8 +2,35 @@ services:
   backend:
     build:
       context: ./backend
-    command: python manage.py runserver 0.0.0.0:8000
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DB_HOST: db
+      DB_NAME: bootcamp_app
+      DB_USER: bootcamp_app
+      DB_PASSWORD: bootcamp_app
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: bootcamp_app
+      POSTGRES_USER: bootcamp_app
+      POSTGRES_PASSWORD: bootcamp_app
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bootcamp_app -d bootcamp_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

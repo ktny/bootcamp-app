@@ -9,6 +9,25 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: bootcamp_app
+          POSTGRES_USER: bootcamp_app
+          POSTGRES_PASSWORD: bootcamp_app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bootcamp_app -d bootcamp_app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DB_HOST: localhost
+      DB_NAME: bootcamp_app
+      DB_USER: bootcamp_app
+      DB_PASSWORD: bootcamp_app
     defaults:
       run:
         working-directory: backend
