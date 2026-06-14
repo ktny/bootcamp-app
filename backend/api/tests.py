@@ -225,3 +225,161 @@ def test_get_item_detail_not_found(client, db):
     # 存在しないIDに対して GET を実行
     response = client.get("/api/items/9999/")
     assert response.status_code == 404
+
+
+def test_aggregate_item_success_count(client, db):
+    item = Item.objects.create(
+        name="集計テストCSV",
+        table_name="test_csv_aggregate",
+        created_at=timezone.now(),
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE SCHEMA IF NOT EXISTS csv_data")
+        cursor.execute(
+            "CREATE TABLE csv_data.test_csv_aggregate ("
+            "_id SERIAL PRIMARY KEY, category TEXT, score TEXT)"
+        )
+        cursor.execute(
+            "INSERT INTO csv_data.test_csv_aggregate (category, score) VALUES "
+            "('A', '100'), ('A', '200'), ('B', '150')"
+        )
+
+    # category ごとに score の COUNT を集計
+    response = client.get(
+        f"/api/items/{item.id}/aggregate/",
+        {"group_by": "category", "aggregate_by": "score", "function": "COUNT"},
+    )
+
+    assert response.status_code == 200
+    res_data = response.json()
+    assert res_data["headers"] == ["category", "score(COUNT)"]
+    assert res_data["rows"] == [["A", "2"], ["B", "1"]]
+
+
+def test_aggregate_item_success_sum(client, db):
+    item = Item.objects.create(
+        name="集計テストCSV2",
+        table_name="test_csv_aggregate2",
+        created_at=timezone.now(),
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE SCHEMA IF NOT EXISTS csv_data")
+        cursor.execute(
+            "CREATE TABLE csv_data.test_csv_aggregate2 ("
+            "_id SERIAL PRIMARY KEY, category TEXT, score TEXT)"
+        )
+        cursor.execute(
+            "INSERT INTO csv_data.test_csv_aggregate2 (category, score) VALUES "
+            "('A', '100'), ('A', '200'), ('B', '150')"
+        )
+
+    # category ごとに score の SUM を集計
+    response = client.get(
+        f"/api/items/{item.id}/aggregate/",
+        {"group_by": "category", "aggregate_by": "score", "function": "SUM"},
+    )
+
+    assert response.status_code == 200
+    res_data = response.json()
+    assert res_data["headers"] == ["category", "score(SUM)"]
+    assert res_data["rows"] == [["A", "300"], ["B", "150"]]
+
+
+def test_aggregate_item_invalid_numeric_cast(client, db):
+    item = Item.objects.create(
+        name="キャストエラーCSV",
+        table_name="test_csv_aggregate_err",
+        created_at=timezone.now(),
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE SCHEMA IF NOT EXISTS csv_data")
+        cursor.execute(
+            "CREATE TABLE csv_data.test_csv_aggregate_err ("
+            "_id SERIAL PRIMARY KEY, category TEXT, score TEXT)"
+        )
+        cursor.execute(
+            "INSERT INTO csv_data.test_csv_aggregate_err (category, score) VALUES "
+            "('A', 'not_number'), ('B', '150')"
+        )
+
+    # SUM を指定した際、数値キャストできない行が存在するためエラーになること
+    response = client.get(
+        f"/api/items/{item.id}/aggregate/",
+        {"group_by": "category", "aggregate_by": "score", "function": "SUM"},
+    )
+
+    assert response.status_code == 400
+    assert "数値" in response.json()["error"]
+
+
+def test_aggregate_item_invalid_function(client, db):
+    item = Item.objects.create(
+        name="関数エラーCSV",
+        table_name="test_csv_aggregate_func_err",
+        created_at=timezone.now(),
+    )
+
+    # 許可されていない関数を指定した際、エラーになること
+    response = client.get(
+        f"/api/items/{item.id}/aggregate/",
+        {"group_by": "category", "aggregate_by": "score", "function": "DROP"},
+    )
+
+    assert response.status_code == 400
+    assert "集計関数" in response.json()["error"]
+
+
+def test_aggregate_item_invalid_column(client, db):
+    item = Item.objects.create(
+        name="カラムエラーCSV",
+        table_name="test_csv_aggregate_col_err",
+        created_at=timezone.now(),
+    )
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE SCHEMA IF NOT EXISTS csv_data")
+        cursor.execute(
+            "CREATE TABLE csv_data.test_csv_aggregate_col_err ("
+            "_id SERIAL PRIMARY KEY, category TEXT)"
+        )
+
+    # 存在しないカラムを指定した際、エラーになること
+    response = client.get(
+        f"/api/items/{item.id}/aggregate/",
+        {"group_by": "category", "aggregate_by": "invalid_col", "function": "COUNT"},
+    )
+
+    assert response.status_code == 400
+    assert "列名" in response.json()["error"]
+
+
+def test_aggregate_item_success_no_group_by(client, db):
+    item = Item.objects.create(
+        name="全体集計テストCSV",
+        table_name="test_csv_aggregate_no_group",
+        created_at=timezone.now(),
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE SCHEMA IF NOT EXISTS csv_data")
+        cursor.execute(
+            "CREATE TABLE csv_data.test_csv_aggregate_no_group ("
+            "_id SERIAL PRIMARY KEY, score TEXT)"
+        )
+        cursor.execute(
+            "INSERT INTO csv_data.test_csv_aggregate_no_group (score) VALUES "
+            "('100'), ('200'), ('150')"
+        )
+
+    # グループ化なしで score の SUM を集計 (450)
+    response = client.get(
+        f"/api/items/{item.id}/aggregate/",
+        {"aggregate_by": "score", "function": "SUM"},
+    )
+
+    assert response.status_code == 200
+    res_data = response.json()
+    assert res_data["headers"] == ["score(SUM)"]
+    assert res_data["rows"] == [["450"]]

@@ -12,7 +12,104 @@
 } @else if (errorMessage()) {
 <p class="status error">{{ errorMessage() }}</p>
 } @else if (item()) {
+<!-- 集計フォーム -->
+<section
+  class="form-wrap"
+  style="margin-bottom: 24px; padding: 20px; border: 1px solid #ccc; border-radius: 4px"
+>
+  <h3 style="margin-bottom: 12px">データ集計</h3>
+  @if (aggErrorMessage()) {
+  <p class="status error" style="margin-top: 0">{{ aggErrorMessage() }}</p>
+  }
+  <div style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap">
+    <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 150px">
+      <label for="agg-group-by" style="font-size: 0.9rem; margin-bottom: 4px">グループ化列</label>
+      <select
+        id="agg-group-by"
+        [value]="groupBy()"
+        (change)="groupBy.set($any($event.target).value)"
+        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px"
+      >
+        <option value="">選択してください</option>
+        @for (header of item()?.headers; track header) {
+        <option [value]="header">{{ header }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 150px">
+      <label for="agg-by" style="font-size: 0.9rem; margin-bottom: 4px">集計列</label>
+      <select
+        id="agg-by"
+        [value]="aggregateBy()"
+        (change)="aggregateBy.set($any($event.target).value)"
+        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px"
+      >
+        <option value="">選択してください</option>
+        @for (header of item()?.headers; track header) {
+        <option [value]="header">{{ header }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 150px">
+      <label for="agg-func" style="font-size: 0.9rem; margin-bottom: 4px">集計関数</label>
+      <select
+        id="agg-func"
+        [value]="func()"
+        (change)="func.set($any($event.target).value)"
+        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px"
+      >
+        <option value="">選択してください</option>
+        @for (fn of allowedFunctions; track fn) {
+        <option [value]="fn">{{ fn }}</option>
+        }
+      </select>
+    </div>
+
+    <button
+      type="button"
+      class="btn btn-primary btn-aggregate"
+      [disabled]="isAggregating()"
+      (click)="onAggregate()"
+      style="padding: 9px 16px"
+    >
+      @if (isAggregating()) { 集計中... } @else { 集計 }
+    </button>
+  </div>
+</section>
+
+<!-- 集計結果表示 -->
+@if (aggregateResult(); as agg) {
+<section
+  class="table-wrap"
+  style="margin-bottom: 24px; padding: 20px; border: 1px solid #ccc; border-radius: 4px"
+>
+  <h3 style="margin-bottom: 12px">集計結果</h3>
+  <table class="aggregate-table">
+    <thead>
+      <tr>
+        @for (header of agg.headers; track header) {
+        <th>{{ header }}</th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of agg.rows; track $index) {
+      <tr>
+        @for (cell of row; track $index) {
+        <td>{{ cell }}</td>
+        }
+      </tr>
+      }
+    </tbody>
+  </table>
+</section>
+}
+
+<!-- 元の全データ表示 -->
 <section class="table-wrap">
+  <h3 style="margin-bottom: 12px">元データ一覧</h3>
   <table class="detail-table">
     <thead>
       <tr>
