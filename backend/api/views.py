@@ -159,7 +159,46 @@ def create_table_and_insert_data(table_name, header, data_rows):
 
 
 @csrf_exempt
-@require_http_methods(["DELETE"])
+@require_http_methods(["GET", "DELETE"])
+def item_detail(request, item_id):
+    if request.method == "GET":
+        return get_item_detail(request, item_id)
+    return delete_item(request, item_id)
+
+
+def get_item_detail(_request, item_id):
+    item = get_object_or_404(Item, id=item_id)
+
+    if not re.match(r"^[a-zA-Z0-9_]+$", item.table_name):
+        raise Http404("Invalid table name")
+
+    quoted_schema = connection.ops.quote_name("csv_data")
+    quoted_table = connection.ops.quote_name(item.table_name)
+
+    with connection.cursor() as cursor:
+        cursor.execute(f"SELECT * FROM {quoted_schema}.{quoted_table} ORDER BY _id")
+        desc = cursor.description or []
+        all_headers = [col[0] for col in desc]
+        id_index = all_headers.index("_id") if "_id" in all_headers else -1
+
+        headers = [h for h in all_headers if h != "_id"]
+        rows = []
+        for row in cursor.fetchall():
+            row_list = list(row)
+            if id_index != -1:
+                row_list.pop(id_index)
+            rows.append(row_list)
+
+    return JsonResponse(
+        {
+            "id": item.id,
+            "name": item.name,
+            "headers": headers,
+            "rows": rows,
+        }
+    )
+
+
 def delete_item(_request, item_id):
     with transaction.atomic():
         item = get_object_or_404(Item.objects.select_for_update(), id=item_id)
@@ -167,7 +206,6 @@ def delete_item(_request, item_id):
         if not re.match(r"^[a-zA-Z0-9_]+$", item.table_name):
             raise Http404("Invalid table name")
 
-        # 実データテーブルを安全に削除 (専用スキーマ csv_data 内)
         with connection.cursor() as cursor:
             quoted_schema = connection.ops.quote_name("csv_data")
             quoted_table_name = connection.ops.quote_name(item.table_name)

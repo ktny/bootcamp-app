@@ -1,0 +1,35 @@
+<header class="page-header">
+  @if (item()) {
+  <h1>CSV 詳細: {{ item()?.name }}</h1>
+  } @else {
+  <h1>CSV 詳細</h1>
+  }
+  <button class="btn btn-secondary btn-back" routerLink="/">戻る</button>
+</header>
+
+@if (isLoading()) {
+<p class="status">読み込み中...</p>
+} @else if (errorMessage()) {
+<p class="status error">{{ errorMessage() }}</p>
+} @else if (item()) {
+<section class="table-wrap">
+  <table class="detail-table">
+    <thead>
+      <tr>
+        @for (header of item()?.headers; track header) {
+        <th>{{ header }}</th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of item()?.rows; track $index) {
+      <tr>
+        @for (cell of row; track $index) {
+        <td>{{ cell }}</td>
+        }
+      </tr>
+      }
+    </tbody>
+  </table>
+</section>
+}

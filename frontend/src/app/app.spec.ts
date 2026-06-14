@@ -1,4 +1,4 @@
-import { TestBed } from "@angular/core/testing";
+import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { provideHttpClient } from "@angular/common/http";
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing";
 import { provideRouter, Router } from "@angular/router";
@@ -9,6 +9,8 @@ import { vi } from "vitest";
 describe("App Integration Tests", () => {
   let http: HttpTestingController;
   let router: Router;
+  let fixture: ComponentFixture<App>;
+  let compiled: HTMLElement;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -18,6 +20,12 @@ describe("App Integration Tests", () => {
 
     http = TestBed.inject(HttpTestingController);
     router = TestBed.inject(Router);
+
+    fixture = TestBed.createComponent(App);
+    router.initialNavigation();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    compiled = fixture.nativeElement as HTMLElement;
   });
 
   afterEach(() => {
@@ -25,16 +33,10 @@ describe("App Integration Tests", () => {
   });
 
   it("should navigate to register view and back", async () => {
-    const fixture = TestBed.createComponent(App);
-    router.initialNavigation();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
     // 1. 初期一覧ロード
     http.expectOne("/api/items/").flush({ items: [] });
     fixture.detectChanges();
 
-    const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector("h1")?.textContent).toContain("CSV 一覧");
 
     // 2. 新規登録ボタンをクリック
@@ -61,11 +63,6 @@ describe("App Integration Tests", () => {
   });
 
   it("should delete an item on the list view", async () => {
-    const fixture = TestBed.createComponent(App);
-    router.initialNavigation();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
     // 初期ロード
     http.expectOne("/api/items/").flush({
       items: [
@@ -80,7 +77,6 @@ describe("App Integration Tests", () => {
     fixture.detectChanges();
 
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    const compiled = fixture.nativeElement as HTMLElement;
     compiled.querySelector(".btn-danger")?.dispatchEvent(new Event("click"));
     fixture.detectChanges();
 
@@ -101,11 +97,6 @@ describe("App Integration Tests", () => {
   });
 
   it("should register a new CSV and redirect to list", async () => {
-    const fixture = TestBed.createComponent(App);
-    router.initialNavigation();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
     // 1. 初期ロード
     http.expectOne("/api/items/").flush({ items: [] });
     fixture.detectChanges();
@@ -115,8 +106,6 @@ describe("App Integration Tests", () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
 
     // 3. フォーム入力のシミュレート
     const nameInput = compiled.querySelector("input[id=csv-name]") as HTMLInputElement;
@@ -157,11 +146,6 @@ describe("App Integration Tests", () => {
   });
 
   it("should display error message on registration failure", async () => {
-    const fixture = TestBed.createComponent(App);
-    router.initialNavigation();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
     // 初期ロード
     http.expectOne("/api/items/").flush({ items: [] });
     fixture.detectChanges();
@@ -171,8 +155,6 @@ describe("App Integration Tests", () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
 
     // 入力
     const nameInput = compiled.querySelector("input[id=csv-name]") as HTMLInputElement;
@@ -198,5 +180,70 @@ describe("App Integration Tests", () => {
 
     const errorEl = compiled.querySelector(".status.error");
     expect(errorEl?.textContent).toContain("同名のCSVが既に存在します");
+  });
+
+  it("should navigate to detail view and display CSV data table", async () => {
+    // 1. 初期ロード
+    http.expectOne("/api/items/").flush({
+      items: [
+        {
+          id: 1,
+          name: "サンプルCSV",
+          tableName: "sample_csv",
+          createdAt: "2026-01-01T00:00:00Z",
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    expect(compiled.querySelector("h1")?.textContent).toContain("CSV 一覧");
+
+    // 2. 詳細リンク（CSV名リンク）をクリック
+    const detailLink = compiled.querySelector("td a") as HTMLAnchorElement;
+    expect(detailLink.textContent).toContain("サンプルCSV");
+    detailLink.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(router.url).toBe("/items/1");
+
+    // 3. 詳細APIの呼び出しとモック応答
+    const detailReq = http.expectOne("/api/items/1/");
+    expect(detailReq.request.method).toBe("GET");
+    detailReq.flush({
+      id: 1,
+      name: "サンプルCSV",
+      headers: ["name", "age"],
+      rows: [
+        ["Alice", "30"],
+        ["Bob", "25"],
+      ],
+    });
+    fixture.detectChanges();
+
+    // 4. データテーブルの描画確認
+    expect(compiled.querySelector("h1")?.textContent).toContain("CSV 詳細: サンプルCSV");
+    const headers = compiled.querySelectorAll(".detail-table th");
+    expect(headers[0]?.textContent).toContain("name");
+    expect(headers[1]?.textContent).toContain("age");
+
+    const cells = compiled.querySelectorAll(".detail-table td");
+    expect(cells[0]?.textContent).toContain("Alice");
+    expect(cells[1]?.textContent).toContain("30");
+    expect(cells[2]?.textContent).toContain("Bob");
+    expect(cells[3]?.textContent).toContain("25");
+
+    // 5. 戻るボタンをクリックして戻る
+    compiled.querySelector(".btn-back")?.dispatchEvent(new Event("click"));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // 一覧画面に戻った際のリロード
+    http.expectOne("/api/items/").flush({ items: [] });
+    fixture.detectChanges();
+
+    expect(router.url).toBe("/");
   });
 });

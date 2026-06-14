@@ -187,3 +187,41 @@ def test_create_item_too_many_rows(client, db):
 
     assert response.status_code == 400
     assert "最大" in response.json()["error"]
+
+
+def test_get_item_detail_success(client, db):
+    # 1. テストデータの準備
+    item = Item.objects.create(
+        name="テストCSV",
+        table_name="test_csv_table_detail",
+        created_at=timezone.now(),
+    )
+
+    # テスト用の実データテーブルを作成 (専用スキーマ csv_data 内)
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE SCHEMA IF NOT EXISTS csv_data")
+        cursor.execute(
+            "CREATE TABLE csv_data.test_csv_table_detail ("
+            "_id SERIAL PRIMARY KEY, name TEXT, age TEXT)"
+        )
+        cursor.execute(
+            "INSERT INTO csv_data.test_csv_table_detail (name, age) VALUES "
+            "('Alice', '30'), ('Bob', '25')"
+        )
+
+    # 2. 詳細取得 API を実行
+    response = client.get(f"/api/items/{item.id}/")
+
+    # 3. アサーション
+    assert response.status_code == 200
+    res_data = response.json()
+    assert res_data["id"] == item.id
+    assert res_data["name"] == "テストCSV"
+    assert res_data["headers"] == ["name", "age"]
+    assert res_data["rows"] == [["Alice", "30"], ["Bob", "25"]]
+
+
+def test_get_item_detail_not_found(client, db):
+    # 存在しないIDに対して GET を実行
+    response = client.get("/api/items/9999/")
+    assert response.status_code == 404

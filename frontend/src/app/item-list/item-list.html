@@ -21,7 +21,9 @@
     <tbody>
       @for (item of items(); track item.id) {
       <tr>
-        <td>{{ item.name }}</td>
+        <td>
+          <a [routerLink]="['/items', item.id]">{{ item.name }}</a>
+        </td>
         <td><code>{{ item.tableName }}</code></td>
         <td>{{ item.createdAt }}</td>
         <td>
