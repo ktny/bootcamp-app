@@ -26,6 +26,11 @@ export class App {
   protected readonly errorMessage = signal("");
 
   constructor() {
+    this.fetchItems();
+  }
+
+  protected fetchItems(): void {
+    this.isLoading.set(true);
     this.http.get<ItemsResponse>("/api/items/").subscribe({
       next: (response) => {
         this.items.set(response.items);
@@ -34,6 +39,21 @@ export class App {
       error: () => {
         this.errorMessage.set("CSV 一覧の取得に失敗しました");
         this.isLoading.set(false);
+      },
+    });
+  }
+
+  protected deleteItem(id: number): void {
+    if (!window.confirm("本当に削除しますか？")) {
+      return;
+    }
+
+    this.http.delete(`/api/items/${id}/`).subscribe({
+      next: () => {
+        this.fetchItems();
+      },
+      error: () => {
+        this.errorMessage.set("CSV の削除に失敗しました");
       },
     });
   }

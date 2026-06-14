@@ -16,6 +16,7 @@
           <th scope="col">CSV 名</th>
           <th scope="col">テーブル名</th>
           <th scope="col">登録日時</th>
+          <th scope="col">操作</th>
         </tr>
       </thead>
       <tbody>
@@ -26,6 +27,9 @@
             <code>{{ item.tableName }}</code>
           </td>
           <td>{{ item.createdAt }}</td>
+          <td>
+            <button class="btn-danger" (click)="deleteItem(item.id)">削除</button>
+          </td>
         </tr>
         }
       </tbody>
