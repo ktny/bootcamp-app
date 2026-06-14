@@ -1,5 +1,5 @@
-import { HttpClient } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { HttpClient } from "@angular/common/http";
+import { Component, inject, signal } from "@angular/core";
 
 type Item = {
   id: number;
@@ -13,26 +13,26 @@ type ItemsResponse = {
 };
 
 @Component({
-  selector: 'app-root',
+  selector: "app-root",
   imports: [],
-  templateUrl: './app.html',
-  styleUrl: './app.css',
+  templateUrl: "./app.html",
+  styleUrl: "./app.css",
 })
 export class App {
   private readonly http = inject(HttpClient);
 
   protected readonly items = signal<Item[]>([]);
   protected readonly isLoading = signal(true);
-  protected readonly errorMessage = signal('');
+  protected readonly errorMessage = signal("");
 
   constructor() {
-    this.http.get<ItemsResponse>('/api/items/').subscribe({
+    this.http.get<ItemsResponse>("/api/items/").subscribe({
       next: (response) => {
         this.items.set(response.items);
         this.isLoading.set(false);
       },
       error: () => {
-        this.errorMessage.set('CSV 一覧の取得に失敗しました');
+        this.errorMessage.set("CSV 一覧の取得に失敗しました");
         this.isLoading.set(false);
       },
     });

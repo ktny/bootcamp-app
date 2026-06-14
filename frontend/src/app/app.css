@@ -3,8 +3,7 @@
   padding: 48px;
   background:
     linear-gradient(135deg, rgba(43, 95, 117, 0.14), transparent 38%),
-    linear-gradient(315deg, rgba(201, 110, 74, 0.12), transparent 42%),
-    #f7f5ef;
+    linear-gradient(315deg, rgba(201, 110, 74, 0.12), transparent 42%), #f7f5ef;
   color: #172026;
   font-family: Georgia, "Yu Mincho", "Hiragino Mincho ProN", serif;
 }

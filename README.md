@@ -190,6 +190,8 @@ docker compose run --rm frontend npm test -- --watch=false
 ```bash
 docker compose run --rm backend ruff format .
 docker compose run --rm backend ruff check .
+docker compose run --rm frontend npm run format
+docker compose run --rm frontend npm run lint
 ```
 
 step3 では Angular の一覧画面から `items` 一覧 API を呼び出します。

@@ -2,7 +2,7 @@ services:
   frontend:
     build:
       context: ./frontend
-    command: npm start -- --host 0.0.0.0 --proxy-config proxy.conf.json
+    command: sh -c "npm ci && npm start -- --host 0.0.0.0 --proxy-config proxy.conf.json"
     ports:
       - "127.0.0.1:4200:4200"
     volumes:
