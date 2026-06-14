@@ -145,7 +145,7 @@ CSV の実データは PostgreSQL 上の専用スキーマに、`table_name` ご
 
 ## 起動方法
 
-step2 ではバックエンドと PostgreSQL を起動できます。
+step3 ではフロントエンド、バックエンド、PostgreSQL を起動できます。
 
 ```bash
 docker compose up --build
@@ -164,6 +164,7 @@ curl http://localhost:8000/api/hello/
 ```
 
 バックエンドはホストの `localhost:8000` にのみ公開します。
+フロントエンドは `http://localhost:4200/` で確認できます。
 
 items 一覧 API は以下で確認できます。
 
@@ -181,6 +182,7 @@ curl http://localhost:8000/api/items/
 
 ```bash
 docker compose run --rm backend pytest
+docker compose run --rm frontend npm test -- --watch=false
 ```
 
 ## format / lint
@@ -188,9 +190,11 @@ docker compose run --rm backend pytest
 ```bash
 docker compose run --rm backend ruff format .
 docker compose run --rm backend ruff check .
+docker compose run --rm frontend npm run format
+docker compose run --rm frontend npm run lint
 ```
 
-step2 では `items` テーブルと seed データを migration で作成します。
+step3 では Angular の一覧画面から `items` 一覧 API を呼び出します。
 
 ## VS Code
 

@@ -1,4 +1,15 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+    command: npm start -- --host 0.0.0.0 --proxy-config proxy.conf.json
+    ports:
+      - "127.0.0.1:4200:4200"
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - backend
+
   backend:
     build:
       context: ./backend
@@ -27,7 +38,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bootcamp_app -d bootcamp_app"]
+      test: [ "CMD-SHELL", "pg_isready -U bootcamp_app -d bootcamp_app" ]
       interval: 5s
       timeout: 5s
       retries: 5
