@@ -214,3 +214,127 @@ def delete_item(_request, item_id):
         item.delete()
 
     return HttpResponse(status=204)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def aggregate_item(request, item_id):
+    item = get_object_or_404(Item, id=item_id)
+
+    group_by = request.GET.get("group_by", "").strip()
+    aggregate_by = request.GET.get("aggregate_by", "").strip()
+    function = request.GET.get("function", "").strip().upper()
+
+    if not aggregate_by or not function:
+        return JsonResponse({"error": "必要なパラメータが不足しています"}, status=400)
+
+    try:
+        validate_aggregate_params(group_by, aggregate_by, function, item.table_name)
+        results = execute_aggregation_query(
+            item.table_name, group_by, aggregate_by, function
+        )
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
+    except Exception as e:
+        return JsonResponse(
+            {"error": f"集計処理中にエラーが発生しました: {e}"}, status=400
+        )
+
+    rows = format_aggregate_results(results, has_group_by=bool(group_by))
+    if group_by:
+        headers = [group_by, f"{aggregate_by}({function})"]
+    else:
+        headers = [f"{aggregate_by}({function})"]
+
+    return JsonResponse({"headers": headers, "rows": rows})
+
+
+def validate_aggregate_params(group_by, aggregate_by, function, table_name):
+    """集計パラメータの妥当性を検証します。不正な場合は ValueError を発生させます。"""
+    # 1. 集計関数の検証
+    allowed_functions = ["SUM", "AVG", "COUNT", "MAX", "MIN"]
+    if function not in allowed_functions:
+        raise ValueError(f"サポートされていない集計関数です: {function}")
+
+    # 2. テーブル名の形式検証 (SQLインジェクション対策)
+    if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
+        raise ValueError("Invalid table name")
+
+    # 3. カラムの存在検証
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = 'csv_data' AND table_name = %s",
+            [table_name],
+        )
+        existing_cols = {row[0] for row in cursor.fetchall()}
+
+    if group_by and group_by not in existing_cols:
+        raise ValueError(f"グループ化対象の列名が存在しません: {group_by}")
+    if aggregate_by not in existing_cols:
+        raise ValueError(f"集計対象の列名が存在しません: {aggregate_by}")
+
+
+def execute_aggregation_query(table_name, group_by, aggregate_by, function):
+    """データベースで集計クエリを実行し、結果を返します。"""
+    quoted_schema = connection.ops.quote_name("csv_data")
+    quoted_table = connection.ops.quote_name(table_name)
+    quoted_agg_col = connection.ops.quote_name(aggregate_by)
+
+    # SUM, AVG は数値キャストする
+    if function in ["SUM", "AVG"]:
+        agg_expr = f"{function}(CAST({quoted_agg_col} AS NUMERIC))"
+    else:
+        agg_expr = f"{function}({quoted_agg_col})"
+
+    if group_by:
+        quoted_group_col = connection.ops.quote_name(group_by)
+        sql = (
+            f"SELECT {quoted_group_col}, {agg_expr} "
+            f"FROM {quoted_schema}.{quoted_table} "
+            f"GROUP BY {quoted_group_col} "
+            f"ORDER BY {quoted_group_col}"
+        )
+    else:
+        sql = f"SELECT {agg_expr} FROM {quoted_schema}.{quoted_table}"
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            return cursor.fetchall()
+    except Exception as e:
+        error_msg = str(e)
+        if (
+            "invalid input syntax for type numeric" in error_msg
+            or "cannot be cast to type numeric" in error_msg
+        ):
+            raise ValueError("集計列に数値に変換できない値が含まれています")
+        raise e
+
+
+def format_aggregate_results(results, has_group_by=True):
+    """データベースの集計結果をJSON用の行リストに整形します。"""
+    rows = []
+    for row in results:
+        if has_group_by:
+            g_val = row[0]
+            agg_val = row[1]
+        else:
+            g_val = None
+            agg_val = row[0]
+
+        if agg_val is None:
+            agg_val = ""
+        elif isinstance(agg_val, float):
+            if agg_val.is_integer():
+                agg_val = str(int(agg_val))
+            else:
+                agg_val = f"{agg_val:.4f}".rstrip("0").rstrip(".")
+        else:
+            agg_val = str(agg_val)
+
+        if has_group_by:
+            rows.append([str(g_val) if g_val is not None else "", agg_val])
+        else:
+            rows.append([agg_val])
+    return rows

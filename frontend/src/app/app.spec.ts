@@ -246,4 +246,138 @@ describe("App Integration Tests", () => {
 
     expect(router.url).toBe("/");
   });
+
+  it("should display aggregation UI, request aggregation API, and render aggregate table", async () => {
+    // 0. 初期一覧ロード要求を処理
+    http.expectOne("/api/items/").flush({ items: [] });
+    fixture.detectChanges();
+
+    // 1. 詳細画面へ直接遷移するシミュレート
+    await router.navigate(["/items/1"]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // 初期詳細データの取得要求が発生するのでモック
+    const detailReq = http.expectOne("/api/items/1/");
+    detailReq.flush({
+      id: 1,
+      name: "集計対象CSV",
+      headers: ["category", "score"],
+      rows: [
+        ["A", "100"],
+        ["B", "200"],
+      ],
+    });
+    fixture.detectChanges();
+
+    expect(compiled.querySelector("h1")?.textContent).toContain("CSV 詳細: 集計対象CSV");
+
+    // 2. 集計UI（ドロップダウン）の存在確認と選択変更
+    const selectGroupBy = compiled.querySelector("select[id=agg-group-by]") as HTMLSelectElement;
+    const selectAggBy = compiled.querySelector("select[id=agg-by]") as HTMLSelectElement;
+    const selectFunc = compiled.querySelector("select[id=agg-func]") as HTMLSelectElement;
+
+    // 選択肢の確認
+    expect(selectGroupBy.options.length).toBe(3); // 空値 + category + score
+    expect(selectAggBy.options.length).toBe(3);
+    expect(selectFunc.options.length).toBe(6); // 空値 + SUM, AVG, COUNT, MAX, MIN
+
+    // category と score, SUM を選択
+    selectGroupBy.value = "category";
+    selectGroupBy.dispatchEvent(new Event("change"));
+    selectAggBy.value = "score";
+    selectAggBy.dispatchEvent(new Event("change"));
+    selectFunc.value = "SUM";
+    selectFunc.dispatchEvent(new Event("change"));
+    fixture.detectChanges();
+
+    // 3. 集計実行ボタンのクリック
+    compiled.querySelector(".btn-aggregate")?.dispatchEvent(new Event("click"));
+    fixture.detectChanges();
+
+    // APIリクエストの検証
+    const aggReq = http.expectOne(
+      "/api/items/1/aggregate/?group_by=category&aggregate_by=score&function=SUM",
+    );
+    expect(aggReq.request.method).toBe("GET");
+    aggReq.flush({
+      headers: ["category", "score(SUM)"],
+      rows: [
+        ["A", "300"],
+        ["B", "150"],
+      ],
+    });
+    fixture.detectChanges();
+
+    // 4. 集計結果テーブルの描画確認
+    const aggHeaders = compiled.querySelectorAll(".aggregate-table th");
+    expect(aggHeaders[0]?.textContent).toContain("category");
+    expect(aggHeaders[1]?.textContent).toContain("score(SUM)");
+
+    const aggCells = compiled.querySelectorAll(".aggregate-table td");
+    expect(aggCells[0]?.textContent).toContain("A");
+    expect(aggCells[1]?.textContent).toContain("300");
+    expect(aggCells[2]?.textContent).toContain("B");
+    expect(aggCells[3]?.textContent).toContain("150");
+  });
+
+  it("should request aggregation API and render aggregate table without a group-by column", async () => {
+    // 0. 初期一覧ロード要求を処理
+    http.expectOne("/api/items/").flush({ items: [] });
+    fixture.detectChanges();
+
+    // 1. 詳細画面へ直接遷移するシミュレート
+    await router.navigate(["/items/1"]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // 初期詳細データの取得要求が発生するのでモック
+    const detailReq = http.expectOne("/api/items/1/");
+    detailReq.flush({
+      id: 1,
+      name: "全体集計対象CSV",
+      headers: ["category", "score"],
+      rows: [
+        ["A", "100"],
+        ["B", "200"],
+      ],
+    });
+    fixture.detectChanges();
+
+    // 2. 集計UIの選択（グループ化列は空のまま、集計列と関数を選択）
+    const selectAggBy = compiled.querySelector("select[id=agg-by]") as HTMLSelectElement;
+    const selectFunc = compiled.querySelector("select[id=agg-func]") as HTMLSelectElement;
+
+    selectAggBy.value = "score";
+    selectAggBy.dispatchEvent(new Event("change"));
+    selectFunc.value = "SUM";
+    selectFunc.dispatchEvent(new Event("change"));
+    fixture.detectChanges();
+
+    // 3. 集計実行ボタンのクリック
+    compiled.querySelector(".btn-aggregate")?.dispatchEvent(new Event("click"));
+    fixture.detectChanges();
+
+    // APIリクエストの検証 (group_by は空)
+    const aggReq = http.expectOne(
+      "/api/items/1/aggregate/?group_by=&aggregate_by=score&function=SUM",
+    );
+    expect(aggReq.request.method).toBe("GET");
+    aggReq.flush({
+      headers: ["score(SUM)"],
+      rows: [["300"]],
+    });
+    fixture.detectChanges();
+
+    // 4. 集計結果テーブルの描画確認 (1列1行のみ)
+    const aggHeaders = compiled.querySelectorAll(".aggregate-table th");
+    expect(aggHeaders.length).toBe(1);
+    expect(aggHeaders[0]?.textContent).toContain("score(SUM)");
+
+    const aggCells = compiled.querySelectorAll(".aggregate-table td");
+    expect(aggCells.length).toBe(1);
+    expect(aggCells[0]?.textContent).toContain("300");
+  });
 });
