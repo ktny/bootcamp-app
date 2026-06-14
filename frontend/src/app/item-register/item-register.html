@@ -1,0 +1,35 @@
+<header class="page-header">
+  <h1>CSV 登録</h1>
+</header>
+
+<section class="form-wrap">
+  <form (submit)="onSubmit($event)">
+    @if (errorMessage()) {
+    <p class="status error">{{ errorMessage() }}</p>
+    }
+    <div class="form-group">
+      <label for="csv-name">CSV 名</label>
+      <input
+        id="csv-name"
+        type="text"
+        [value]="csvName()"
+        (input)="csvName.set($any($event.target).value)"
+        required
+      />
+    </div>
+    <div class="form-group">
+      <label for="csv-text">CSV テキスト</label>
+      <textarea
+        id="csv-text"
+        [value]="csvText()"
+        (input)="csvText.set($any($event.target).value)"
+        placeholder="ヘッダーを1行目としてCSVを貼り付けてください"
+        required
+      ></textarea>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn-secondary" routerLink="/">キャンセル</button>
+      <button type="submit" class="btn-primary" [disabled]="isSaving()">登録</button>
+    </div>
+  </form>
+</section>

@@ -1,0 +1,60 @@
+import { HttpClient } from "@angular/common/http";
+import { Component, inject, signal } from "@angular/core";
+import { RouterLink } from "@angular/router";
+
+type Item = {
+  id: number;
+  name: string;
+  tableName: string;
+  createdAt: string;
+};
+
+type ItemsResponse = {
+  items: Item[];
+};
+
+@Component({
+  selector: "app-item-list",
+  imports: [RouterLink],
+  templateUrl: "./item-list.html",
+})
+export class ItemList {
+  private readonly http = inject(HttpClient);
+
+  protected readonly items = signal<Item[]>([]);
+  protected readonly isLoading = signal(true);
+  protected readonly errorMessage = signal("");
+
+  constructor() {
+    this.fetchItems();
+  }
+
+  protected fetchItems(): void {
+    this.isLoading.set(true);
+    this.http.get<ItemsResponse>("/api/items/").subscribe({
+      next: (response) => {
+        this.items.set(response.items);
+        this.isLoading.set(false);
+      },
+      error: () => {
+        this.errorMessage.set("CSV 一覧の取得に失敗しました");
+        this.isLoading.set(false);
+      },
+    });
+  }
+
+  protected deleteItem(id: number): void {
+    if (!window.confirm("本当に削除しますか？")) {
+      return;
+    }
+
+    this.http.delete(`/api/items/${id}/`).subscribe({
+      next: () => {
+        this.fetchItems();
+      },
+      error: () => {
+        this.errorMessage.set("CSV の削除に失敗しました");
+      },
+    });
+  }
+}

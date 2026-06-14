@@ -1,57 +1,72 @@
 import { TestBed } from "@angular/core/testing";
 import { provideHttpClient } from "@angular/common/http";
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing";
+import { provideRouter, Router } from "@angular/router";
 import { App } from "./app";
+import { routes } from "./app.routes";
+import { vi } from "vitest";
 
-describe("App", () => {
+describe("App Integration Tests", () => {
+  let http: HttpTestingController;
+  let router: Router;
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter(routes)],
     }).compileComponents();
+
+    http = TestBed.inject(HttpTestingController);
+    router = TestBed.inject(Router);
   });
 
-  it("should create the app", () => {
-    const fixture = TestBed.createComponent(App);
-    const http = TestBed.inject(HttpTestingController);
-    const app = fixture.componentInstance;
+  afterEach(() => {
+    http.verify();
+  });
 
+  it("should navigate to register view and back", async () => {
+    const fixture = TestBed.createComponent(App);
+    router.initialNavigation();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // 1. 初期一覧ロード
     http.expectOne("/api/items/").flush({ items: [] });
-
-    expect(app).toBeTruthy();
-    http.verify();
-  });
-
-  it("should render items from the API", async () => {
-    const fixture = TestBed.createComponent(App);
-    const http = TestBed.inject(HttpTestingController);
-
-    http.expectOne("/api/items/").flush({
-      items: [
-        {
-          id: 1,
-          name: "サンプルCSV",
-          tableName: "sample_csv",
-          createdAt: "2026-01-01T00:00:00Z",
-        },
-      ],
-    });
     fixture.detectChanges();
 
-    await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-
     expect(compiled.querySelector("h1")?.textContent).toContain("CSV 一覧");
-    expect(compiled.textContent).toContain("サンプルCSV");
-    expect(compiled.textContent).toContain("sample_csv");
-    http.verify();
+
+    // 2. 新規登録ボタンをクリック
+    compiled.querySelector(".btn-primary")?.dispatchEvent(new Event("click"));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(router.url).toBe("/register");
+    expect(compiled.querySelector("h1")?.textContent).toContain("CSV 登録");
+
+    // 3. キャンセルボタンをクリックして戻る
+    compiled.querySelector(".btn-secondary")?.dispatchEvent(new Event("click"));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // 一覧画面に戻った際のリロード
+    http.expectOne("/api/items/").flush({ items: [] });
+    fixture.detectChanges();
+
+    expect(router.url).toBe("/");
+    expect(compiled.querySelector("h1")?.textContent).toContain("CSV 一覧");
   });
 
-  it("should delete an item and reload the list when the delete button is clicked and confirmed", async () => {
+  it("should delete an item on the list view", async () => {
     const fixture = TestBed.createComponent(App);
-    const http = TestBed.inject(HttpTestingController);
+    router.initialNavigation();
+    await fixture.whenStable();
+    fixture.detectChanges();
 
-    // 1. 初期ロード
+    // 初期ロード
     http.expectOne("/api/items/").flush({
       items: [
         {
@@ -63,30 +78,125 @@ describe("App", () => {
       ],
     });
     fixture.detectChanges();
-    await fixture.whenStable();
 
-    // 2. confirm をモック化し、削除ボタンをクリック
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const compiled = fixture.nativeElement as HTMLElement;
-    const deleteButton = compiled.querySelector(".btn-danger") as HTMLButtonElement;
-    expect(deleteButton).toBeTruthy();
-    deleteButton.click();
+    compiled.querySelector(".btn-danger")?.dispatchEvent(new Event("click"));
+    fixture.detectChanges();
 
-    // 3. DELETE リクエストの検証とモック応答
+    // DELETE 呼び出し検証
     const deleteReq = http.expectOne("/api/items/1/");
     expect(deleteReq.request.method).toBe("DELETE");
     deleteReq.flush(null, { status: 204, statusText: "No Content" });
+    fixture.detectChanges();
 
-    // 4. 自動で走る GET リロードリクエストの検証とモック応答（空リストを返す）
+    // リロード呼び出し検証
     const reloadReq = http.expectOne("/api/items/");
-    expect(reloadReq.request.method).toBe("GET");
     reloadReq.flush({ items: [] });
-
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
 
-    // 5. 画面からアイテムが消えたことを検証
     expect(compiled.textContent).not.toContain("サンプルCSV");
-    http.verify();
+  });
+
+  it("should register a new CSV and redirect to list", async () => {
+    const fixture = TestBed.createComponent(App);
+    router.initialNavigation();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // 1. 初期ロード
+    http.expectOne("/api/items/").flush({ items: [] });
+    fixture.detectChanges();
+
+    // 2. 登録画面へ遷移
+    await router.navigate(["/register"]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    // 3. フォーム入力のシミュレート
+    const nameInput = compiled.querySelector("input[id=csv-name]") as HTMLInputElement;
+    const textInput = compiled.querySelector("textarea[id=csv-text]") as HTMLTextAreaElement;
+    nameInput.value = "新規テストCSV";
+    nameInput.dispatchEvent(new Event("input"));
+    textInput.value = "a,b\n1,2";
+    textInput.dispatchEvent(new Event("input"));
+    fixture.detectChanges();
+
+    // 4. 送信
+    compiled.querySelector("form")?.dispatchEvent(new Event("submit"));
+    fixture.detectChanges();
+
+    const postReq = http.expectOne("/api/items/");
+    expect(postReq.request.method).toBe("POST");
+    postReq.flush({}, { status: 201, statusText: "Created" });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // 成功後のリダイレクト (/) での一覧ロード
+    const reloadReq = http.expectOne("/api/items/");
+    reloadReq.flush({
+      items: [
+        {
+          id: 2,
+          name: "新規テストCSV",
+          tableName: "csv_data_new",
+          createdAt: "2026-06-14T05:00:00Z",
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    expect(router.url).toBe("/");
+    expect(compiled.textContent).toContain("新規テストCSV");
+  });
+
+  it("should display error message on registration failure", async () => {
+    const fixture = TestBed.createComponent(App);
+    router.initialNavigation();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // 初期ロード
+    http.expectOne("/api/items/").flush({ items: [] });
+    fixture.detectChanges();
+
+    // 登録画面へ
+    await router.navigate(["/register"]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    // 入力
+    const nameInput = compiled.querySelector("input[id=csv-name]") as HTMLInputElement;
+    const textInput = compiled.querySelector("textarea[id=csv-text]") as HTMLTextAreaElement;
+    nameInput.value = "重複CSV";
+    nameInput.dispatchEvent(new Event("input"));
+    textInput.value = "a,b\n1,2";
+    textInput.dispatchEvent(new Event("input"));
+    fixture.detectChanges();
+
+    // 送信
+    compiled.querySelector("form")?.dispatchEvent(new Event("submit"));
+    fixture.detectChanges();
+
+    const postReq = http.expectOne("/api/items/");
+    postReq.flush(
+      { error: "同名のCSVが既に存在します" },
+      { status: 400, statusText: "Bad Request" },
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const errorEl = compiled.querySelector(".status.error");
+    expect(errorEl?.textContent).toContain("同名のCSVが既に存在します");
   });
 });
